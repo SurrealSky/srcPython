@@ -1,9 +1,9 @@
 import sys
 import argparse
 
-from get.CRTSHSubdomainFinder import CRTSHSubdomainFinder
-from get.ICPMainDomainFinder import ICPQueryClient
-from get.VTSubdomainScanner import VTSubdomainScanner
+from subDomain.CRTSHSubdomainFinder import CRTSHSubdomainFinder
+from Domain.ICPMainDomainFinder import ICPQueryClient
+from subDomain.VTSubdomainScanner import VTSubdomainScanner
 
 if __name__ == "__main__":
     # 创建解析器
