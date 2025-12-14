@@ -2,8 +2,9 @@ import sys
 import argparse
 
 from subDomain.CRTSHSubdomainFinder import CRTSHSubdomainFinder
-from Domain.ICPMainDomainFinder import execute_icp_query, save_subdomains
+from Domain.ICPMainDomainFinder import clean_subdomains, execute_icp_query, save_subdomains
 from subDomain.VTSubdomainScanner import VTSubdomainScanner
+from tools.TxtFileMerger import TxtFileMerger
 
 if __name__ == "__main__":
     # 创建解析器
@@ -29,6 +30,13 @@ if __name__ == "__main__":
     vt_parser.add_argument('--api_key','-k',help='VirusTotal API密钥')
     vt_parser.add_argument('--domain','-d',help='要查询的域名')
 
+    #txt合并去重
+    txt_parser = subparsers.add_parser('txt_merge', help='TXT文件合并去重')
+    txt_parser.add_argument('--input_files','-i',   
+                            nargs='+',
+                            required=True,
+                            help='输入的TXT文件列表')
+
     # 通用参数
     for subparser in [crtsh_parser, icp_parser,vt_parser]:
         subparser.add_argument('--output', '-o',
@@ -44,7 +52,9 @@ if __name__ == "__main__":
         import asyncio
         domain_list = asyncio.run(execute_icp_query(args.unit_name))
         print(f"ICP查询结果: {len(domain_list)} 个域名")
-        save_subdomains(args.unit_name,domain_list,args.output)
+        cleaned_domains = clean_subdomains(domain_list)
+        print(f"清理后共有: {len(cleaned_domains)} 个唯一域名")
+        save_subdomains(args.unit_name,cleaned_domains,args.output)
     elif args.command == 'crtsh':
         print(f"执行CRTsh查询: {', '.join(args.domains)}")
         # 这里调用实际的CRTsh查询代码
@@ -61,6 +71,15 @@ if __name__ == "__main__":
         scanner = VTSubdomainScanner(args.api_key,args.domain)
         subdomains = scanner.run()
         scanner.save_subdomains(subdomains,args.output)
+    elif args.command == 'txt_merge':
+        merger = TxtFileMerger()
+        print("执行TXT文件合并去重")
+        merger.process(
+            input_paths=args.input_files,
+            output_file="merged_result.txt",
+            deduplicate=True,
+            sort_lines=True
+        )
     else:
         parser.print_help()
     

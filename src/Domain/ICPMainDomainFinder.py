@@ -150,6 +150,18 @@ async def execute_icp_query(query_args='科大讯飞股份有限公司'):
         await icp.cleanup()
         await asyncio.sleep(0.1)  # 确保清理完成
 
+def clean_subdomains(domains):
+    """
+    清理和过滤域名
+    """
+    cleaned = set()
+    
+    for domain in domains:
+        if domain in cleaned:
+            continue
+        cleaned.add(domain)
+    return cleaned
+
 def save_subdomains(unit_name,subdomains,output_file=None):
     """
     保存子域名到文件
@@ -158,7 +170,9 @@ def save_subdomains(unit_name,subdomains,output_file=None):
         print("[!] 无子域名可保存")
 
     if output_file is None:
-        output_file = f"{unit_name}_icp_domains.txt"
+        now = datetime.datetime.now()
+        date_str = f"{now.year}{now.month:02d}{now.day:02d}"
+        output_file = f"{unit_name}_icp_domains_{date_str}.txt"
     # 排序以便阅读
     sorted_subdomains = sorted(subdomains, key=lambda x: (len(x.split('.')), x))
     print(f"[+] 找到 {len(sorted_subdomains)} 个唯一子域名")
