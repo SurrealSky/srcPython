@@ -1,572 +1,169 @@
-# -*- coding: utf-8 -*-
 import asyncio
-import aiohttp
-import cv2
-import time
-import hashlib
-import re
-import base64
-import os
-import numpy as np
+
 import ujson
-import random
-import uuid
-from Crypto.Cipher import AES
-from Crypto.Util.Padding import pad
-from Domain.icp.detnate import detnate
-from aiohttp import TCPConnector
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning)
-import ssl
-import subprocess
-import locale
-from contextlib import asynccontextmanager
-from Domain.icp.load_config import config
-ssl._create_default_https_context = ssl._create_unverified_context()
+from Domain.icp.ymicp import beian
+from datetime import datetime
 
-class beian:
-    def __init__(self):
-        self.typj = {
-            0: ujson.dumps(
-                {"pageNum": "", "pageSize": "", "unitName": "", "serviceType": 1}
-            ),  # 网站
-            1: ujson.dumps(
-                {"pageNum": "", "pageSize": "", "unitName": "", "serviceType": 6}
-            ),  # APP
-            2: ujson.dumps(
-                {"pageNum": "", "pageSize": "", "unitName": "", "serviceType": 7}
-            ),  # 小程序
-            3: ujson.dumps(
-                {"pageNum": "", "pageSize": "", "unitName": "", "serviceType": 8}
-            ),  # 快应用
-        }
-        self.btypj = {
-            0: ujson.dumps({"domainName": ""}),
-            1: ujson.dumps({"serviceName": "", "serviceType": 6}),
-            2: ujson.dumps({"serviceName": "", "serviceType": 7}),
-            3: ujson.dumps({"serviceName": "", "serviceType": 8}),
-        }
-        self.session = None
-        self.cookie_headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.41 Safari/537.36 Edg/101.0.1210.32"
-        }
-        self.home = "https://beian.miit.gov.cn/"
-        self.url = "https://hlwicpfwc.miit.gov.cn/icpproject_query/api/auth"
-        self.getCheckImage = "https://hlwicpfwc.miit.gov.cn/icpproject_query/api/image/getCheckImagePoint"
-        self.checkImage = (
-            "https://hlwicpfwc.miit.gov.cn/icpproject_query/api/image/checkImage"
-        )
-        # 正常查询
-        self.queryByCondition = "https://hlwicpfwc.miit.gov.cn/icpproject_query/api/icpAbbreviateInfo/queryByCondition"
-        # 违法违规域名查询
-        self.blackqueryByCondition = "https://hlwicpfwc.miit.gov.cn/icpproject_query/api/blackListDomain/queryByCondition"
-        # 违法违规APP,小程序,快应用
-        self.blackappAndMiniByCondition = "https://hlwicpfwc.miit.gov.cn/icpproject_query/api/blackListDomain/queryByCondition_appAndMini"
-        # APP/小程序/快应用详情查询接口
-        self.queryDetailByAppAndMiniId = "https://hlwicpfwc.miit.gov.cn/icpproject_query/api/icpAbbreviateInfo/queryDetailByAppAndMiniId"
-        self.sign = "eyJ0eXBlIjozLCJleHREYXRhIjp7InZhZnljb2RlX2ltYWdlX2tleSI6IjUyZWI1ZTcyODViNzRmNWJhM2YwYzBkNTg0YTg3NmVmIn0sImUiOjE3NTY5NzAyNDg4MjN9.Ngpkwn4T7sQoQF9pCk_sQQpH61wQUEKnK2sQ8hDIq-Q"
-        self.token = ""
-        self.token_expire = 0
-        self.det = detnate()
-        self.timeout = aiohttp.ClientTimeout(total=getattr(getattr(config, 'system', object()), 'http_client_timeout', 30))
-        
-        # 连接池配置
-        self.connector_config = {
-            'limit': 100,
-            'limit_per_host': 30,
-            'ttl_dns_cache': 300,
-            'use_dns_cache': True,
-            'ssl': False,
-            'keepalive_timeout': 30
-        }
-
-    async def _get_connector(self):
-        return TCPConnector(**self.connector_config)
-
-    @asynccontextmanager
-    async def get_session(self, proxy=""):
-        # 为每个session创建独立的连接器
-        connector = await self._get_connector()
-        
-        session = aiohttp.ClientSession(
-            timeout=self.timeout,
-            connector=connector,
-            headers={'Connection': 'keep-alive'}
-        )
-        
-        try:
-            yield session
-        finally:
-            # 确保session和connector都被正确关闭
-            await session.close()
-            await connector.close()
-
-    async def get_token(self, proxy=""):
-        base_header = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.41 Safari/537.36 Edg/101.0.1210.32",
-            "Origin": "https://beian.miit.gov.cn",
-            "Referer": "https://beian.miit.gov.cn/",
-            "Cookie": f"__jsluid_s={uuid.uuid4().hex}",
-            "Accept": "application/json, text/plain, */*",
-        }
-        
-        if self.token_expire > int(time.time() * 1000):
-            return True, self.token, base_header
-        
-        timeStamp = round(time.time() * 1000)
-        authSecret = "testtest" + str(timeStamp)
-        authKey = hashlib.md5(authSecret.encode(encoding="UTF-8")).hexdigest()
-        auth_data = {"authKey": authKey, "timeStamp": timeStamp}
-        
-        try:
-            async with self.get_session(proxy) as session:
-                async with session.post(self.url, data=auth_data, headers=base_header, proxy=proxy if proxy else None) as req:
-                    req_text = await req.text()
-
-            if "当前访问疑似黑客攻击" in req_text:
-                return False, "当前访问已被创宇盾拦截", ""
-            
-            t = ujson.loads(req_text)
-            token = t["params"]["bussiness"]
-            expire = int(time.time() * 1000) + t["params"]["expire"]
-            
-            self.token = token
-            self.token_expire = expire
-            
-            return True, token, base_header
-        except Exception as e:
-            print(f"get_token 失败: {e}")
-            return False, str(e), ""
-
-    async def get_cookie(self, proxy=""):
-        async with await self.get_session(proxy) as session:
-            async with session.get(self.home, headers=self.cookie_headers, proxy=proxy if proxy else None) as req:
+async def Page_traversal_temporary(icp, info , base_header ,total , proxies):
+    # 分页获取所有数据，解决单页数量限制问题
+    domain_list = []
+    total_pages = (total + info['pageSize'] - 1) // info['pageSize']
+    while info['pageNum'] <= total_pages:
+        length = str(len(str(ujson.dumps(info, ensure_ascii=False)).encode("utf-8")))
+        base_header.update({"Content-Length": length})
+        async with icp.get_session(proxies) as session:
+            async with session.post(icp.queryByCondition,
+                                    data=ujson.dumps(info, ensure_ascii=False),
+                                    headers=base_header,
+                                    proxy=proxies if proxies else None) as req:
                 res = await req.text()
-                return re.compile("[0-9a-z]{32}").search(str(req.cookies))[0]
+        if "当前访问疑似黑客攻击" in res:
+            print("当前访问已被创宇盾拦截")
+        result = ujson.loads(res)
+        domain_list.extend(get_domain_list_from_response(result))
+        info['pageNum'] += 1
+    return domain_list
 
-    # 进行aes加密
-    def get_pointJson(self, value, key):
-        cipher = AES.new(key.encode(), AES.MODE_ECB)
-        ciphertext = cipher.encrypt(pad(ujson.dumps(value).encode(), AES.block_size))
-        ciphertext_base64 = base64.b64encode(ciphertext)
-        return ciphertext_base64.decode("utf-8")
+def get_domain_list_from_response(response):
+    domain_list = []
+    if response and 'params' in response and 'list' in response['params']:
+        unitName_list = response['params']['list']
+        for item in unitName_list:
+            if item.get('domain') and item.get('unitName'):
+                if item['domain'] not in domain_list:
+                    domain_list.append(item['domain'])
+                else:
+                    # 记录重复domainId到新日志
+                    print(f"重复domain: {item['domainId']}\tunitName:{item['unitName']}\tdomain:{item['domain']}")
+            else:
+                print("unitName or domain is None...")
+    else:
+        print(f"No domain found in {response}. Skipping...")
+    return domain_list
 
-    def get_clientUid(self):
-        characters = "0123456789abcdef"
-        unique_id = ["0"] * 36
+def query_from(query_url, search_data, id):
 
-        for i in range(36):
-            unique_id[i] = random.choice(characters)
+    params = {
+        'search': search_data,
+        'pageNum': 1,
+        'pageSize': 10,
+    }
 
-        unique_id[14] = "4"
-        unique_id[19] = characters[(3 & int(unique_id[19], 16)) | 8]
-        unique_id[8] = unique_id[13] = unique_id[18] = unique_id[23] = "-"
+    req = make_request(query_url, params, search_data)
+    
+    # 检查req是否为字典类型或是否包含所需的键
+    if req and isinstance(req, dict) and 'params' in req:
+        try:
+            req_list = req['params']['list']
+            if req_list and isinstance(req_list, list) and len(req_list) > 0:
+                params['search'] = req_list[0]['unitName']
+                req_unitName = make_request(query_url, params, params['search'])
+                if req_unitName and isinstance(req_unitName, dict) and 'params' in req_unitName:
+                    total = req_unitName['params']['total']
+                    domain_list = Page_traversal_temporary(id, total, params, query_url, req_list)
 
-        point_id = "point-" + "".join(unique_id)
+                    if domain_list and isinstance(domain_list, list) and total != len(domain_list):
+                        print(f"{search_data} 应提取出 {total} 条信息，实际为 {len(domain_list)} 条")
+                    return total
 
-        return ujson.dumps({"clientUid": point_id})
+        except Exception as e:
+            print(f"{search_data} an error occurred: {str(e)}")
+    return None
 
-    async def check_img(self, proxy=""):
-        success, token, base_header = await self.get_token(proxy)
+def query_from_file(query_url, filename, start_index):
+    with open(filename, 'r', encoding='utf-8') as file:
+        data_list = file.readlines()
+        total_domains = len(data_list)
+    if start_index < 1:
+        start_index = 1
+        print("输入异常, start_index 重置为 1")
+    elif start_index > total_domains:
+        start_index = total_domains
+        print(f"输入异常, start_index 重置为 {total_domains}")
+        
+    for index in range(start_index-1, total_domains):
+        data = data_list[index].strip()
+        
+        if data:
+            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S:%f')
+            Processing_Domain_output = f'Time: {current_time}, Schedule: {index+1}/{total_domains}, Domain: {data}'
+            print("\n")
+            print(f"Processing {Processing_Domain_output}")
+            print("\n")
+            total = query_from(query_url, data, index+1)
+            if total is not None:
+                Processing_Domain_output += f', Total: {total}'
+                print(Processing_Domain_output, 'processing_Domain.log')   
+
+async def execute_icp_query(query_args='科大讯飞股份有限公司'):
+    print(f"执行ICP查询: {query_args}")
+    # 可选代理配置
+    proxies ="http://127.0.0.1:8080"
+    #proxies = None  # 如果不使用代理则设置为None
+
+    icp = beian()
+    try:
+        #第一次查询，先请求验证码，获取token
+        success, token, base_header = await icp.get_token(proxies)
         if not success:
             print(f"获取token失败：{token}")
             return False, token,'','',''
-        try:
-            data = self.get_clientUid()
-            clientUid = ujson.loads(data)["clientUid"]
-            length = str(len(str(data).encode("utf-8")))
-            base_header.update({"Content-Length": length, "Token": token})
-            base_header["Content-Type"] = "application/json"
-            try:
-                async with self.get_session(proxy) as session:
-                    async with session.post(self.getCheckImage, data=data, headers=base_header, proxy=proxy if proxy else None) as req:
-                        res = await req.json()
-            except Exception as e:
-                print(f"请求验证码时失败：{e}")
-                return False, f"请求验证码时失败：{e}",'','',''
-            
-            p_uuid = res["params"]["uuid"]
-            big_image = res["params"]["bigImage"]
-            small_image = res["params"]["smallImage"]
-            secretKey = res["params"]["secretKey"]
-            wordCount = res["params"]["wordCount"]
-            start = time.time()
-            success,selice_small = await self.small_selice(small_image, big_image)
+        #获取验证码
+        while True:
+            success, p_uuid, token, sign, base_header = await icp.check_img(proxies)
             if not success:
-                print(f"验证码切割失败：{selice_small}")
-                return False, "selice_small",'','',''
-            print(f"预测用时 {time.time() - start} s")
-
-            pointJson = self.get_pointJson(selice_small, secretKey)
-            data = ujson.loads(
-                ujson.dumps(
-                    {
-                        "token": p_uuid,
-                        "secretKey": secretKey,
-                        "clientUid": clientUid,
-                        "pointJson": pointJson,
-                    }
-                )
-            )
-            length = str(len(str(data).encode("utf-8")))
-            base_header.update({"Content-Length": length})
-            async with self.get_session(proxy) as session:
-                async with session.post(self.checkImage, json=data, headers=base_header, proxy=proxy if proxy else None) as req:
-                    res = await req.text()
-            data = ujson.loads(res)
-            if data["success"] == False:
-                captcha_config = getattr(config, 'captcha', object())
-                if getattr(captcha_config, 'save_failed_img', False):
-                    save_path = getattr(captcha_config, 'save_failed_img_path', './failed_captcha')
-                    folder_paths = [f'{save_path}/ibig', f'{save_path}/isma']
-                    for folder in folder_paths:
-                        os.makedirs(folder, exist_ok=True)
-
-                    isma = cv2.imdecode(
-                        np.frombuffer(base64.b64decode(small_image), np.uint8), cv2.COLOR_GRAY2RGB
-                    )
-
-                    ibig = cv2.imdecode(
-                        np.frombuffer(base64.b64decode(big_image), np.uint8), cv2.COLOR_GRAY2RGB
-                    )
-                    
-                    filename = f"{uuid.uuid4()}.jpg"
-                    isma_image_name = f"{save_path}/isma/{filename}"
-                    ibig_image_name = f"{save_path}/ibig/{filename}"
-                    print(f"保存到：{isma_image_name}，{ibig_image_name}")
-                    cv2.imwrite(isma_image_name,isma)
-                    cv2.imwrite(ibig_image_name,ibig)
-                return False, "验证码识别失败",'','',''
-            else:
-                return True, p_uuid, token, data["params"]["sign"], base_header
-            
-        except Exception as e:
-            print(f"check_image 失败: {e}")
-            return False
-
-    async def small_selice(self, small_image, big_image):
-        isma = cv2.imdecode(
-            np.frombuffer(base64.b64decode(small_image), np.uint8), cv2.COLOR_GRAY2RGB
-        )
-
-        isma = cv2.cvtColor(isma, cv2.COLOR_BGRA2BGR) # 测试完注释
-        ibig = cv2.imdecode(
-            np.frombuffer(base64.b64decode(big_image), np.uint8), cv2.COLOR_GRAY2RGB
-        )
-
-        captcha_config = getattr(config, 'captcha', object())
-        if getattr(captcha_config, 'coding_code', 'auto') == 'labour':
-            def mouse_callback(event, x, y, flags, param):
-                if event == cv2.EVENT_LBUTTONDOWN:
-                    data.append({"x":x,"y":y})
-                    if len(data) == 4:
-                        cv2.destroyAllWindows()
-            data = []
-            # 确保两个图像的通道数量一致
-            if ibig.shape[2] != isma.shape[2]:
-                if ibig.shape[2] == 1:
-                    ibig = cv2.cvtColor(ibig, cv2.COLOR_GRAY2BGR)
-                elif ibig.shape[2] == 4 and isma.shape[2] == 3:
-                    isma = cv2.cvtColor(isma, cv2.COLOR_BGR2BGRA)
-                elif ibig.shape[2] == 3 and isma.shape[2] == 4:
-                    ibig = cv2.cvtColor(ibig, cv2.COLOR_BGR2BGRA)
-                elif ibig.shape[2] == 3 and isma.shape[2] == 1:
-                    isma = cv2.cvtColor(isma, cv2.COLOR_GRAY2BGR)
-                elif ibig.shape[2] == 1 and isma.shape[2] == 3:
-                    ibig = cv2.cvtColor(ibig, cv2.COLOR_GRAY2BGR)
-            width = min(ibig.shape[1], isma.shape[1]) 
-            ibig_resized = cv2.resize(ibig, (width, int(ibig.shape[0] * (width / ibig.shape[1])))) 
-            isma_resized = cv2.resize(isma, (width, int(isma.shape[0] * (width / isma.shape[1]))))
-            new_image = np.vstack((ibig_resized, isma_resized))
-            cv2.imshow('Please click in order', new_image)
-            cv2.setMouseCallback('Please click in order', mouse_callback)
-            cv2.waitKey(0)
-            return True, data
-        else:
-            success,data = self.det.check_target(ibig, isma)
-            return success,data
-
-    async def getAppAndMiniDetail(self, dataId, serviceType, p_uuid, token, sign, base_header, proxy="", session=None):
-        """优化的详情获取，移除会话复用"""
-        info = {"dataId": dataId, "serviceType": serviceType}
+                print(f"打码失败：{p_uuid} ,重新尝试打码...")
+                continue
+            break
+        #查询网站
+        info = ujson.loads(icp.typj.get(0))     #0是查询网站
+        info["pageNum"] = ''
+        info["pageSize"] = ''
+        info["unitName"] = query_args
         length = str(len(str(ujson.dumps(info, ensure_ascii=False)).encode("utf-8")))
-
-        detail_header = base_header.copy()
-        detail_header.update({"Content-Length": length, "Uuid": p_uuid, "Token": token, "Sign": sign})
-
-        if not getattr(getattr(config, 'captcha', object()), 'enable', False):
-            detail_header.pop("Uuid", None)
-            detail_header.pop("Content-Length", None)
-
-        # 优先使用传入的会话，否则创建新会话
-        if session:
-            if getattr(getattr(config, 'captcha', object()), 'enable', False):
-                async with session.post(self.queryDetailByAppAndMiniId,
-                                        data=ujson.dumps(info, ensure_ascii=False),
-                                        headers=detail_header,
-                                        proxy=proxy if proxy else None) as req:
-                    res = await req.text()
-            else:
-                async with session.post(f"{self.queryDetailByAppAndMiniId}",
-                                        json=info,
-                                        headers=detail_header,
-                                        proxy=proxy if proxy else None) as req:
-                    res = await req.text()
-        else:
-            async with self.get_session(proxy) as session:
-                if getattr(getattr(config, 'captcha', object()), 'enable', False):
-                    async with session.post(self.queryDetailByAppAndMiniId,
-                                            data=ujson.dumps(info, ensure_ascii=False),
-                                            headers=detail_header,
-                                            proxy=proxy if proxy else None) as req:
-                        res = await req.text()
-                else:
-                    async with session.post(f"{self.queryDetailByAppAndMiniId}",
-                                            json=info,
-                                            headers=detail_header,
-                                            proxy=proxy if proxy else None) as req:
-                        res = await req.text()
-        return True, ujson.loads(res)
-
-    async def getbeian(self, name, sp, pageNum, pageSize, proxy=""):
-        info = ujson.loads(self.typj.get(sp))
-        info["pageNum"] = pageNum
-        info["pageSize"] = pageSize
-        info["unitName"] = name
-        
-        if getattr(getattr(config, 'captcha', object()), 'enable', False):
-            success, p_uuid, token, sign, base_header = await self.check_img(proxy)
-            if not success:
-                print(f"打码失败：{p_uuid}")
-                return False, p_uuid
-
-            length = str(len(str(ujson.dumps(info, ensure_ascii=False)).encode("utf-8")))
-            base_header.update({"Content-Length": length, "Uuid": p_uuid, "Token": token, "Sign": sign})
-            
-            async with self.get_session(proxy) as session:
-                async with session.post(self.queryByCondition,
-                                        data=ujson.dumps(info, ensure_ascii=False),
-                                        headers=base_header,
-                                        proxy=proxy if proxy else None) as req:
-                    res = await req.text()
-        else:
-            success, token, base_header = await self.get_token(proxy)
-            sign = ""
-            p_uuid = ""
-            if not success:
-                print(f"获取token失败")
-                return False, None
-            base_header.update({"Token": token, "Sign": self.sign})
-
-            async with self.get_session(proxy) as session:
-                async with session.post(f"{self.queryByCondition}/",
-                                        json=info,
-                                        headers=base_header,
-                                        proxy=proxy if proxy else None) as req:
-                    res = await req.text()
-
+        base_header.update({"Content-Length": length, "Uuid": p_uuid, "Token": token, "Sign": sign})
+        async with icp.get_session(proxies) as session:
+            async with session.post(icp.queryByCondition,
+                                    data=ujson.dumps(info, ensure_ascii=False),
+                                    headers=base_header,
+                                    proxy=proxies if proxies else None) as req:
+                res = await req.text()
+                rci = req.headers.get('Rci', '')
         if "当前访问疑似黑客攻击" in res:
-            return False, "当前访问已被创宇盾拦截"
-        
+            print("当前访问已被创宇盾拦截")
         result = ujson.loads(res)
+        domain_list = []
+        if result is not None and result.get('success')== True:
+            #取出第一次查询结果
+            domain_list = get_domain_list_from_response(result)
+            total = result['params'].get('total', 0)
+            info["pageNum"] = 2
+            info["pageSize"] = result['params'].get('pageSize', 0)
+            print(f"查询结果总数: {total} , pageSize: {info['pageSize']}")
+            if( total > info["pageSize"]):
+                base_header.update({"Rci": rci})
+                result = await Page_traversal_temporary(icp,info,base_header,total,proxies)
+            #需要合并result和domainId_list
+            domain_list.extend(result)
+        return domain_list
+    finally:
+        await icp.cleanup()
+        await asyncio.sleep(0.1)  # 确保清理完成
 
-        # 并发详情获取
-        if (sp in (1, 2, 3)
-            and result.get("success")
-            and result.get("params", {}).get("list")):
-            
-            items = result["params"]["list"]
-            if not items:
-                return True, result
-                
-            print(f"需要并发获取详细信息数量: {len(items)}")
-            
-            # 使用现有的detail_concurrency配置，默认值5
-            max_concurrency = min(
-                getattr(getattr(config, "system", object()), "detail_concurrency", 5),
-                len(items),
-                20  # 最大并发限制
-            )
-            sem = asyncio.Semaphore(max_concurrency)
-            
-            async def fetch_detail(item):
-                if "dataId" not in item:
-                    return item
-                    
-                serviceType = 6 if sp == 1 else (7 if sp == 2 else 8)
-                try:
-                    async with sem:
-                        # 每个详情请求使用独立会话
-                        d_success, d_data = await self.getAppAndMiniDetail(
-                            item["dataId"], serviceType, p_uuid, token, 
-                            sign if getattr(getattr(config, 'captcha', object()), 'enable', False) else self.sign, 
-                            base_header, proxy
-                        )
-                    
-                    if d_success and d_data.get("success"):
-                        return d_data["params"]
-                    else:
-                        print(f"详情获取失败 dataId={item.get('dataId')}")
-                        return item
-                except Exception as e:
-                    print(f"详情获取异常 dataId={item.get('dataId')} err={e}")
-                    return item
-
-            # 分批处理，避免创建过多任务
-            batch_size = max_concurrency * 2
-            detailed_list = []
-            
-            for i in range(0, len(items), batch_size):
-                batch = items[i:i + batch_size]
-                tasks = [fetch_detail(item) for item in batch]
-                batch_results = await asyncio.gather(*tasks, return_exceptions=True)
-                
-                # 处理异常结果
-                for j, res in enumerate(batch_results):
-                    if isinstance(res, Exception):
-                        print(f"批次任务异常: {res}")
-                        detailed_list.append(batch[j])  # 返回原始数据
-                    else:
-                        detailed_list.append(res)
-            
-            result["params"]["list"] = detailed_list
-            print(f"并发详情完成，总计 {len(detailed_list)} 条")
-            
-        return True, result
-
-    async def getblackbeian(self, name, sp, proxy=""):
-        info = ujson.loads(self.btypj.get(sp))
-        if sp == 0:
-            info["domainName"] = name
-        else:
-            info["serviceName"] = name
-
-
-        if getattr(getattr(config, 'captcha', object()), 'enable', False):
-            success, p_uuid, token, sign, base_header = await self.check_img(proxy)
-            if not success:
-                return False, p_uuid
-            
-            length = str(len(str(ujson.dumps(info, ensure_ascii=False)).encode("utf-8")))
-            base_header.update(
-                {"Content-Length": length, "Uuid": p_uuid, "Token": token, "Sign": sign}
-            )
-            async with self.get_session(proxy) as session:
-                async with session.post((self.blackqueryByCondition if sp == 0 else self.blackappAndMiniByCondition),
-                                         data=ujson.dumps(info, ensure_ascii=False),
-                                         headers=base_header, proxy=proxy if proxy else None) as req:
-                    res = await req.text()
-            
-        else:
-            success, token, base_header = await self.get_token(proxy)
-            sign = ""
-            p_uuid = ""
-            if not success:
-                print(f"获取token失败")
-                return False, None
-            base_header.update({"Token": token, "Sign": self.sign})
-
-            async with self.get_session(proxy) as session:
-                async with session.post((f"{self.blackqueryByCondition}/" if sp == 0 else f"{self.blackappAndMiniByCondition}/"),
-                                            json=info, 
-                                            headers=base_header, proxy=proxy if proxy else None) as req:
-                    res = await req.text()
-
-        if "当前访问疑似黑客攻击" in res:
-            return False, "当前访问已被创宇盾拦截"
-
-        return True,ujson.loads(res)
-
-    async def autoget(self, name, sp, pageNum="", pageSize="", proxy="", b=1):
-        try:
-            if proxy != "":
-                success,data = (
-                    await self.getbeian(name, sp, pageNum, pageSize, proxy)
-                    if b == 1
-                    else await self.getblackbeian(name, sp, proxy)
-                )
-            else:
-                success,data = (
-                    await self.getbeian(name, sp, pageNum, pageSize)
-                    if b == 1
-                    else await self.getblackbeian(name, sp)
-                )
-            if not success:
-                return {"code":500,"message":data}
-            if data["code"] == 500 or not success:
-                return {"code": 122, "message": "工信部服务器异常"}
-        except Exception as e:
-            return {"code": 122, "message": "查询失败","error":str(e)}
-        
-        return data
-
-    # APP备案查询
-    async def ymApp(self, name, pageNum="", pageSize="", proxy=""):
-        return await self.autoget(name, 1, pageNum, pageSize, proxy)
-
-    # 网站备案查询
-    async def ymWeb(self, name, pageNum="", pageSize="", proxy=""):
-        return await self.autoget(name, 0, pageNum, pageSize, proxy)
-
-    # 小程序备案查询
-    async def ymMiniApp(self, name, pageNum="", pageSize="", proxy=""):
-        return await self.autoget(name, 2, pageNum, pageSize, proxy)
-
-    # 快应用备案查询
-    async def ymKuaiApp(self, name, pageNum="", pageSize="", proxy=""):
-        return await self.autoget(name, 3, pageNum, pageSize, proxy)
-
-    # 违法违规APP查询
-    async def bymApp(self, name, proxy=""):
-        return await self.autoget(name, 1, b=0, proxy=proxy)
-
-    # 违法违规网站查询
-    async def bymWeb(self, name, proxy=""):
-        return await self.autoget(name, 0, b=0, proxy=proxy)
-
-    # 违法违规小程序查询
-    async def bymMiniApp(self, name, proxy=""):
-        return await self.autoget(name, 2, b=0, proxy=proxy)
-
-    # 违法违规快应用查询
-    async def bymKuaiApp(self, name, proxy=""):
-        return await self.autoget(name, 3, b=0, proxy=proxy)
-
-    async def cleanup(self):
-        """清理资源"""
-        print("beian资源清理完成")
-
-    def __del__(self):
-        """析构函数，确保资源清理"""
-        try:
-            pass
-        except:
-            pass
-
-if __name__ == "__main__":
-    async def main():
-        a = beian()
-        try:
-            # 官方单页查询pageSize最大支持26
-            # 页面索引pageNum从1开始,第一页可以不写
-            data = await a.ymWeb("深圳市腾讯计算机系统有限公司")
-            print(f"查询结果：\n{data}")
-            data = await a.ymApp("深圳市腾讯计算机系统有限公司")
-            print(f"查询结果：\n{data}")
-        finally:
-            await a.cleanup()  # 确保资源清理
-
-    asyncio.run(main())
-
+def save_subdomains(unit_name,subdomains,output_file=None):
     """
-    在其他代码模块中调用（异步）
-
-        from ymicp import beian
-
-        icp = beian()
-        try:
-            data = await icp.ymApp("微信")
-        finally:
-            await icp.cleanup()  # 重要：确保资源清理
-    
+    保存子域名到文件
     """
+    if len(subdomains)==0:
+        print("[!] 无子域名可保存")
+
+    if output_file is None:
+        output_file = f"{unit_name}_icp_domains.txt"
+    # 排序以便阅读
+    sorted_subdomains = sorted(subdomains, key=lambda x: (len(x.split('.')), x))
+    print(f"[+] 找到 {len(sorted_subdomains)} 个唯一子域名")
+    # 保存到文本文件
+    with open(output_file, 'w', encoding='utf-8') as f:
+        for subdomain in sorted_subdomains:
+            f.write(f"{subdomain}\n")
+    print(f"[+] 子域名已保存到: {output_file}")

@@ -2,25 +2,8 @@ import sys
 import argparse
 
 from subDomain.CRTSHSubdomainFinder import CRTSHSubdomainFinder
-from Domain.ICPMainDomainFinder import beian
+from Domain.ICPMainDomainFinder import execute_icp_query, save_subdomains
 from subDomain.VTSubdomainScanner import VTSubdomainScanner
-
-
-async def execute_icp_query(query_args='科大讯飞股份有限公司'):
-    print(f"执行ICP查询: {query_args}")
-    # 可选代理配置
-    proxies = {
-        "http": "http://127.0.0.1:8080",
-        "https": "http://127.0.0.1:8080",
-    }
-    proxies = None  # 如果不使用代理则设置为None
-
-    icp = beian()
-    try:
-        data = await icp.ymWeb(query_args)
-        print(data)
-    finally:
-        await icp.cleanup()  # 重要：确保资源清理
 
 if __name__ == "__main__":
     # 创建解析器
@@ -38,6 +21,7 @@ if __name__ == "__main__":
     # icp 命令
     icp_parser = subparsers.add_parser('icp', help='ICP备案查询')
     icp_parser.add_argument('--unit_name','-n',
+                            required=True,
                            help='单位名称')
     
     #virustotal 命令
@@ -58,7 +42,9 @@ if __name__ == "__main__":
 
     if args.command == 'icp':
         import asyncio
-        asyncio.run(execute_icp_query())
+        domain_list = asyncio.run(execute_icp_query(args.unit_name))
+        print(f"ICP查询结果: {len(domain_list)} 个域名")
+        save_subdomains(args.unit_name,domain_list,args.output)
     elif args.command == 'crtsh':
         print(f"执行CRTsh查询: {', '.join(args.domains)}")
         # 这里调用实际的CRTsh查询代码
