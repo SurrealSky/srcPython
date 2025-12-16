@@ -5,6 +5,7 @@ from subDomain.CRTSHSubdomainFinder import CRTSHSubdomainFinder
 from Domain.ICPMainDomainFinder import clean_subdomains, execute_icp_query, save_subdomains
 from subDomain.VTSubdomainScanner import VTSubdomainScanner
 from tools.TxtFileMerger import TxtFileMerger
+from tools.TextDiff import TextDiff
 
 if __name__ == "__main__":
     # 创建解析器
@@ -31,14 +32,23 @@ if __name__ == "__main__":
     vt_parser.add_argument('--domain','-d',help='要查询的域名')
 
     #txt合并去重
-    txt_parser = subparsers.add_parser('txt_merge', help='TXT文件合并去重')
-    txt_parser.add_argument('--input_files','-i',   
+    txt_merge_parser = subparsers.add_parser('txt_merge', help='TXT文件合并去重')
+    txt_merge_parser.add_argument('--input_files','-i',   
                             nargs='+',
                             required=True,
                             help='输入的TXT文件列表')
+    
+    #txt差异项
+    txt_diff_parser = subparsers.add_parser('txt_diff', help='TXT文件差异对比')
+    txt_diff_parser.add_argument('--first_file','-f',  
+                            required=True,
+                            help='基准TXT文件')
+    txt_diff_parser.add_argument('--second_file','-s',  
+                            required=True,
+                            help='参考TXT文件') 
 
     # 通用参数
-    for subparser in [crtsh_parser, icp_parser,vt_parser]:
+    for subparser in [crtsh_parser, icp_parser,vt_parser,txt_merge_parser,txt_diff_parser]:
         subparser.add_argument('--output', '-o',
                               help='输出文件')
         subparser.add_argument('--verbose', '-v',
@@ -79,6 +89,13 @@ if __name__ == "__main__":
             output_file="merged_result.txt",
             deduplicate=True,
             sort_lines=True
+        )
+    elif args.command == 'txt_diff':
+        print("执行TXT文件差异对比")
+        diff = TextDiff(args.first_file)
+        diff.save_diff(
+            args.second_file,
+            output_file="diff_result.txt"
         )
     else:
         parser.print_help()
