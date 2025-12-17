@@ -28,8 +28,8 @@ if __name__ == "__main__":
     
     #virustotal 命令
     vt_parser = subparsers.add_parser('vt', help='VirusTotal查询')
-    vt_parser.add_argument('--api_key','-k',help='VirusTotal API密钥')
-    vt_parser.add_argument('--domain','-d',help='要查询的域名')
+    vt_parser.add_argument('--api_key','-k',required=True,help='VirusTotal API密钥')
+    vt_parser.add_argument('--domain','-d',required=True,help='要查询的域名')
 
     #txt合并去重
     txt_merge_parser = subparsers.add_parser('txt_merge', help='TXT文件合并去重')
