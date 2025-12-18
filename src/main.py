@@ -1,11 +1,13 @@
 import sys
 import argparse
+import datetime
 
 from subDomain.CRTSHSubdomainFinder import CRTSHSubdomainFinder
 from Domain.ICPMainDomainFinder import clean_subdomains, execute_icp_query, save_subdomains
 from subDomain.VTSubdomainScanner import VTSubdomainScanner
 from tools.TxtFileMerger import TxtFileMerger
 from tools.TextDiff import TextDiff
+from scanner.HttpScanner import HttpScanner
 
 if __name__ == "__main__":
     # 创建解析器
@@ -46,10 +48,22 @@ if __name__ == "__main__":
     txt_diff_parser.add_argument('--second_file','-s',  
                             required=True,
                             help='参考TXT文件') 
+    #http请求
+    http_get_parser = subparsers.add_parser('http_get', help='HTTP GET请求工具')
+    http_get_parser.add_argument('--input_file','-i',  
+                            required=True,
+                            help='url文件名')
+    http_get_parser.add_argument('-t', '--timeout', 
+                                 type=int,
+                                 default=5, help='请求超时时间(秒) (默认: 5)')
+    http_get_parser.add_argument('-w', '--workers', 
+                                 type=int, default=10, help='最大并发数 (默认: 10)')
+
 
     # 通用参数
-    for subparser in [crtsh_parser, icp_parser,vt_parser,txt_merge_parser,txt_diff_parser]:
+    for subparser in [crtsh_parser, icp_parser,vt_parser,txt_merge_parser,txt_diff_parser,http_get_parser]:
         subparser.add_argument('--output', '-o',
+                               default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_results.txt',
                               help='输出文件')
         subparser.add_argument('--verbose', '-v',
                               action='store_true',
@@ -96,6 +110,15 @@ if __name__ == "__main__":
         diff.save_diff(
             args.second_file,
             output_file="diff_result.txt"
+        )
+    elif args.command == 'http_get':
+        print("执行HTTP GET请求工具")
+        scanner = HttpScanner()
+        scanner.run(
+            input_file=args.input_file,
+            output_file=args.output,
+            timeout=args.timeout,
+            max_workers=args.workers
         )
     else:
         parser.print_help()
