@@ -8,6 +8,7 @@ from subDomain.VTSubdomainScanner import VTSubdomainScanner
 from tools.TxtFileMerger import TxtFileMerger
 from tools.TextDiff import TextDiff
 from scanner.HttpScanner import HttpScanner
+from tools.xss_pdf import make_pdf
 
 if __name__ == "__main__":
     # 创建解析器
@@ -58,10 +59,12 @@ if __name__ == "__main__":
                                  default=5, help='请求超时时间(秒) (默认: 5)')
     http_get_parser.add_argument('-w', '--workers', 
                                  type=int, default=10, help='最大并发数 (默认: 10)')
-
+    
+    #xss_pdf 命令 (示例占位符)
+    xss_pdf_parser = subparsers.add_parser('xss_pdf', help='生成含XSS的PDF文件')
 
     # 通用参数
-    for subparser in [crtsh_parser, icp_parser,vt_parser,txt_merge_parser,txt_diff_parser,http_get_parser]:
+    for subparser in [crtsh_parser, icp_parser,vt_parser,txt_merge_parser,txt_diff_parser,http_get_parser,xss_pdf_parser]:
         subparser.add_argument('--output', '-o',
                                default=f'{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}_results.txt',
                               help='输出文件')
@@ -120,6 +123,9 @@ if __name__ == "__main__":
             timeout=args.timeout,
             max_workers=args.workers
         )
+    elif args.command == 'xss_pdf':
+        print("执行XSS PDF生成工具")
+        make_pdf(args.output)
     else:
         parser.print_help()
     
