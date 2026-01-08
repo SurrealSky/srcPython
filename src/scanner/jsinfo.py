@@ -17,6 +17,8 @@ import time
 
 socket.setdefaulttimeout(20)
 
+#bug:太多的301跳转，会出现问题
+
 class JSINFO:
     def argparser(self):
         """解析参数"""
@@ -304,7 +306,7 @@ class JSINFO:
                 async with sem:
                     request_args = {
                     'url': url,
-                    'timeout': aiohttp.ClientTimeout(total=10),
+                    'timeout': aiohttp.ClientTimeout(total=20),
                     'headers': self.headers,
                     'allow_redirects': True,
                     }
@@ -321,7 +323,7 @@ class JSINFO:
         except ConnectionResetError:
             pass
         except Exception as e:
-            logger.warning('[-]Resolve {} fail: {} '.format(url,str(e)))
+            logger.warning(f'[-]Resolve {url} fail: {repr(e)} ')
             return False
 
     def filter_black_extend(self, file_extend):
