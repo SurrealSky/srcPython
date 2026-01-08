@@ -36,7 +36,7 @@ class JSINFO:
         args = self.argparser()
 
         # 保存代理配置
-        self.proxy = "http://127.0.0.1:8080"
+        self.proxy = None #"http://127.0.0.1:8080"
 
         """初始化参数"""
         self.queue = Queue()
