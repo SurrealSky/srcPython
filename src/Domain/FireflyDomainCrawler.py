@@ -208,7 +208,7 @@ class FireflyDomainCrawler:
         # 返回列表形式
         return list(missing)
 
-    def run(self, save_json: bool = True, save_csv: bool = False):
+    def run(self,file,sheet,column, save_json: bool = True, save_csv: bool = False):
         """
         执行完整的抓取流程：获取数据并保存
         
@@ -222,9 +222,9 @@ class FireflyDomainCrawler:
 
         print("从 Firefly 爬取的域名数量:", len(firefly_crawler_data))
         missing_items = self.find_missing_data(firefly_crawler_data,
-            'D:\\work\\漏洞\\SRC列表.xlsx',
-            '科大讯飞资产',
-            'A',        # 列字母
+            file,
+            sheet,
+            column,        # 列字母
             True             # 第一行是表头，从第二行开始读
         )
         print("缺失的数据:", missing_items)
@@ -241,7 +241,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='这是一个示例程序')
     # 添加位置参数（必须按顺序提供）
     parser.add_argument('-t','--token', required=True, help='请输入Firefly的Bearer Token')
+    parser.add_argument('-f','--file',required=True, help='请输入要比对的Excel文件路径')
+    parser.add_argument('-s','--sheet', required=True,help='请输入要比对的Excel表单名称')
+    parser.add_argument('-c','--column', required=True,help='请输入要比对的Excel列（可以是列字母或从1开始的列索引）')
     # 解析参数
     args = parser.parse_args()
     crawler = FireflyDomainCrawler(args.token)
-    crawler.run(save_json=False, save_csv=False)
+    crawler.run(args.file,args.sheet,args.column,save_json=False, save_csv=False)
