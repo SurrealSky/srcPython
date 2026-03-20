@@ -5,16 +5,18 @@ from typing import List, Dict, Optional
 import openpyxl
 from openpyxl.utils import column_index_from_string
 import argparse
+import csv
 
 class FireflyDomainCrawler:
 
     def __init__(
         self,
-        token: str,
+        craw: bool = False,
+        token: str = None,
         base_url: str = "https://firefly-src.geekyoung.com",
         page_size: int = 20,
         timeout: int = 10,
-        delay: float = 0.5
+        delay: float = 5.0
     ):
         """
         初始化爬虫
@@ -27,6 +29,7 @@ class FireflyDomainCrawler:
         """
         self.base_url = base_url.rstrip('/')
         self.api_path = "/api/domain/list"
+        self.craw = craw
         self.token = token
         self.page_size = page_size
         self.timeout = timeout
@@ -108,7 +111,6 @@ class FireflyDomainCrawler:
             if self.total is None:
                 self.total = result.get("total", 0)
                 print(f"总记录数: {self.total}")
-                return self.data
 
             # 判断是否还有下一页
             if len(data) < self.page_size or len(self.data) >= self.total:
@@ -148,7 +150,6 @@ class FireflyDomainCrawler:
             print("没有数据可保存，请先调用 fetch_all() 获取数据。")
             return
         
-        import csv
         if not self.data:
             return
         keys = self.data[0].keys()
@@ -208,18 +209,29 @@ class FireflyDomainCrawler:
         # 返回列表形式
         return list(missing)
 
-    def run(self,file,sheet,column, save_json: bool = True, save_csv: bool = False):
+    def run(self,file,sheet,column):
         """
         执行完整的抓取流程：获取数据并保存
         
         :param save_json: 是否保存 JSON 文件
         :param save_csv: 是否保存 CSV 文件
         """
-        self.fetch_all()
-        firefly_crawler_data = crawler.get_domains_set()
+        firefly_crawler_data = set()
+        if self.craw is True:
+            self.fetch_all()
+            self.save_csv()
+            firefly_crawler_data = self.get_domains_set()
+        else:
+            print("跳过数据抓取,从本地文件读取")
+            #从文件中读取数据
+            with open('domains.csv', mode='r', encoding='utf-8') as crawfile:
+                reader = csv.reader(crawfile)
+                next(reader)  # 跳过表头
+                for row in reader:
+                    firefly_crawler_data.add(row[0])  # 假设 domain 在第一列
+
         #firefly_crawler_data = {"xfyun.com","xunfei.cn","xunfei.com","iflytek.com","iflytek.cn"}
         print("从 Firefly 爬取的域名数量:", firefly_crawler_data)
-
         print("从 Firefly 爬取的域名数量:", len(firefly_crawler_data))
         missing_items = self.find_missing_data(firefly_crawler_data,
             file,
@@ -227,24 +239,26 @@ class FireflyDomainCrawler:
             column,        # 列字母
             True             # 第一行是表头，从第二行开始读
         )
+        print("缺失的数据数量:", len(missing_items))
         print("缺失的数据:", missing_items)
-
-        if save_json:
-            self.save_json()
-        if save_csv:
-            self.save_csv()
-
 
 # 使用示例
 if __name__ == "__main__":
     # 创建解析器
     parser = argparse.ArgumentParser(description='这是一个示例程序')
     # 添加位置参数（必须按顺序提供）
-    parser.add_argument('-t','--token', required=True, help='请输入Firefly的Bearer Token')
+    parser.add_argument('-t','--token', required=False, help='请输入Firefly的Bearer Token')
+    parser.add_argument('--craw', action='store_true', help='启用 craw 模式',default=False)
     parser.add_argument('-f','--file',required=True, help='请输入要比对的Excel文件路径')
     parser.add_argument('-s','--sheet', required=True,help='请输入要比对的Excel表单名称')
     parser.add_argument('-c','--column', required=True,help='请输入要比对的Excel列（可以是列字母或从1开始的列索引）')
     # 解析参数
     args = parser.parse_args()
-    crawler = FireflyDomainCrawler(args.token)
-    crawler.run(args.file,args.sheet,args.column,save_json=False, save_csv=False)
+    if(args.craw == False):
+        args.token = None
+    else:
+        if args.token is None:
+            print("请提供有效的 Bearer Token")
+            exit(1)
+    crawler = FireflyDomainCrawler(args.craw,args.token)
+    crawler.run(args.file,args.sheet,args.column)
