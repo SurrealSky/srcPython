@@ -3,7 +3,7 @@ import numbers
 import numpy as np
 import onnxruntime as ort
 from PIL import Image
-from Domain.icp.load_config import config
+from icp.load_config import config
 import os
 import sys
 

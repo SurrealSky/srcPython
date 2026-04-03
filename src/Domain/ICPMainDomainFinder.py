@@ -1,8 +1,10 @@
 import asyncio
-
+import argparse
+import time
 import ujson
-from Domain.icp.ymicp import beian
+from icp.ymicp import beian
 from datetime import datetime
+from icp.mlog import logger
 
 async def Page_traversal_temporary(icp, info , base_header ,total , proxies):
     # 分页获取所有数据，解决单页数量限制问题
@@ -22,6 +24,7 @@ async def Page_traversal_temporary(icp, info , base_header ,total , proxies):
         result = ujson.loads(res)
         domain_list.extend(get_domain_list_from_response(result))
         info['pageNum'] += 1
+        time.sleep(5.0)  # 避免过快请求导致被封禁
     return domain_list
 
 def get_domain_list_from_response(response):
@@ -96,7 +99,7 @@ def query_from_file(query_url, filename, start_index):
                 print(Processing_Domain_output, 'processing_Domain.log')   
 
 async def execute_icp_query(query_args='科大讯飞股份有限公司'):
-    print(f"执行ICP查询: {query_args}")
+    logger.info(f"执行ICP查询: {query_args}")
     # 可选代理配置
     proxies ="http://127.0.0.1:8080"
     #proxies = None  # 如果不使用代理则设置为None
@@ -106,14 +109,13 @@ async def execute_icp_query(query_args='科大讯飞股份有限公司'):
         #第一次查询，先请求验证码，获取token
         success, token, base_header = await icp.get_token(proxies)
         if not success:
-            print(f"获取token失败：{token}")
+            logger.error(f"获取token失败：{token}")
             return False, token,'','',''
         #获取验证码
         while True:
             success, p_uuid, token, sign, base_header = await icp.check_img(proxies)
             if not success:
-                print(f"打码失败：{p_uuid} ,重新尝试打码...")
-                continue
+                logger.error(f"打码失败：{p_uuid} ,重新尝试打码...")
             break
         #查询网站
         info = ujson.loads(icp.typj.get(0))     #0是查询网站
@@ -181,3 +183,23 @@ def save_subdomains(unit_name,subdomains,output_file=None):
         for subdomain in sorted_subdomains:
             f.write(f"{subdomain}\n")
     print(f"[+] 子域名已保存到: {output_file}")
+
+
+    # 使用示例
+
+#基于https://github.com/HG-ha/ICP_Query项目，由于网站接口经常变动，所以使用时关注项目更新，或者自行调整代码以适应接口变动
+#py -3 .\src\Domain\ICPMainDomainFinder.py -n 科大讯飞股份有限公司
+if __name__ == "__main__":
+    # 创建解析器
+    parser = argparse.ArgumentParser(description='这是一个示例程序')
+    # 添加位置参数（必须按顺序提供）
+    parser.add_argument('--unit_name','-n',required=True,help='单位名称')
+    parser.add_argument('--output', '-o',default=f'{datetime.now().strftime("%Y%m%d_%H%M%S")}_results.txt',help='输出文件')
+    parser.add_argument('--verbose', '-v',action='store_true',help='详细输出')
+    # 解析参数
+    args = parser.parse_args()
+    domain_list = asyncio.run(execute_icp_query(args.unit_name))
+    print(f"ICP查询结果: {len(domain_list)} 个域名")
+    cleaned_domains = clean_subdomains(domain_list)
+    print(f"清理后共有: {len(cleaned_domains)} 个唯一域名")
+    save_subdomains(args.unit_name,cleaned_domains,args.output)

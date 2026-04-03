@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-from Domain.icp.siamese import Siamese
+from icp.siamese import Siamese
 import cv2
 from PIL import Image
 import numpy as np
 import onnxruntime as ort
 import os
 import sys
-from Domain.icp.load_config import config
+from icp.load_config import config
 
 class YOLO_ONNX:
     def __init__(self, model_path):
