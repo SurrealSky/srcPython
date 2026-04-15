@@ -1,9 +1,9 @@
 import argparse
 import datetime
 
-from tools.TxtFileMerger import TxtFileMerger
-from tools.TextDiff import TextDiff
-from tools.xss_pdf import make_pdf
+from TxtFileMerger import TxtFileMerger
+from TextDiff import TextDiff
+from xss_pdf import make_pdf
 
 if __name__ == "__main__":
     # 创建解析器
