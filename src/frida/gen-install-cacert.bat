@@ -2,7 +2,31 @@
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 
-set "HASH=9a5ba575"
+REM 第一步：将 DER 格式转换为 PEM
+openssl x509 -inform DER -in cacert.der -out cacert.pem
+if errorlevel 1 (
+    echo 转换 DER 到 PEM 失败
+    exit /b 1
+)
+
+REM 第二步：获取证书的 subject_hash_old 值（仅取第一行）
+set "HASH="
+for /f "usebackq delims=" %%i in (`openssl x509 -inform PEM -subject_hash_old -in cacert.pem 2^>nul`) do (
+    if not defined HASH set "HASH=%%i"
+)
+
+if "%HASH%"=="" (
+    echo 无法获取证书哈希值
+    exit /b 1
+)
+
+REM 第三步：复制 cacert.pem 为 %HASH%.0
+copy cacert.pem "%HASH%.0" >nul
+if errorlevel 1 (
+    echo 复制文件失败
+    exit /b 1
+)
+
 echo 生成证书成功: %HASH%.0
 
 REM 第四步：复制 %HASH%.0 到手机
