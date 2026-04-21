@@ -1,5 +1,6 @@
 import asyncio
 import argparse
+import csv
 import time
 import ujson
 from icp.ymicp import beian
@@ -32,77 +33,19 @@ def get_domain_list_from_response(response):
     if response and 'params' in response and 'list' in response['params']:
         unitName_list = response['params']['list']
         for item in unitName_list:
-            if item.get('domain') and item.get('unitName'):
-                if item['domain'] not in domain_list:
-                    domain_list.append(item['domain'])
-                else:
-                    # 记录重复domainId到新日志
-                    print(f"重复domain: {item['domainId']}\tunitName:{item['unitName']}\tdomain:{item['domain']}")
+            if item.get('domain') and item.get('serviceLicence'):
+                domain_list.append([item['serviceLicence'], item['domain']])
             else:
                 print("unitName or domain is None...")
     else:
         print(f"No domain found in {response}. Skipping...")
     return domain_list
 
-def query_from(query_url, search_data, id):
-
-    params = {
-        'search': search_data,
-        'pageNum': 1,
-        'pageSize': 10,
-    }
-
-    req = make_request(query_url, params, search_data)
-    
-    # 检查req是否为字典类型或是否包含所需的键
-    if req and isinstance(req, dict) and 'params' in req:
-        try:
-            req_list = req['params']['list']
-            if req_list and isinstance(req_list, list) and len(req_list) > 0:
-                params['search'] = req_list[0]['unitName']
-                req_unitName = make_request(query_url, params, params['search'])
-                if req_unitName and isinstance(req_unitName, dict) and 'params' in req_unitName:
-                    total = req_unitName['params']['total']
-                    domain_list = Page_traversal_temporary(id, total, params, query_url, req_list)
-
-                    if domain_list and isinstance(domain_list, list) and total != len(domain_list):
-                        print(f"{search_data} 应提取出 {total} 条信息，实际为 {len(domain_list)} 条")
-                    return total
-
-        except Exception as e:
-            print(f"{search_data} an error occurred: {str(e)}")
-    return None
-
-def query_from_file(query_url, filename, start_index):
-    with open(filename, 'r', encoding='utf-8') as file:
-        data_list = file.readlines()
-        total_domains = len(data_list)
-    if start_index < 1:
-        start_index = 1
-        print("输入异常, start_index 重置为 1")
-    elif start_index > total_domains:
-        start_index = total_domains
-        print(f"输入异常, start_index 重置为 {total_domains}")
-        
-    for index in range(start_index-1, total_domains):
-        data = data_list[index].strip()
-        
-        if data:
-            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S:%f')
-            Processing_Domain_output = f'Time: {current_time}, Schedule: {index+1}/{total_domains}, Domain: {data}'
-            print("\n")
-            print(f"Processing {Processing_Domain_output}")
-            print("\n")
-            total = query_from(query_url, data, index+1)
-            if total is not None:
-                Processing_Domain_output += f', Total: {total}'
-                print(Processing_Domain_output, 'processing_Domain.log')   
-
 async def execute_icp_query(query_args='科大讯飞股份有限公司'):
     logger.info(f"执行ICP查询: {query_args}")
     # 可选代理配置
-    proxies ="http://127.0.0.1:8080"
-    #proxies = None  # 如果不使用代理则设置为None
+    #proxies ="http://127.0.0.1:8080"
+    proxies = None  # 如果不使用代理则设置为None
 
     icp = beian()
     try:
@@ -152,7 +95,8 @@ async def execute_icp_query(query_args='科大讯飞股份有限公司'):
         await icp.cleanup()
         await asyncio.sleep(0.1)  # 确保清理完成
 
-def clean_subdomains(domains):
+# 清理和过滤域名
+def clean_domains(domains):
     """
     清理和过滤域名
     """
@@ -164,42 +108,36 @@ def clean_subdomains(domains):
         cleaned.add(domain)
     return cleaned
 
-def save_subdomains(unit_name,subdomains,output_file=None):
+def save_subdomains(unit_name,domains,output_file=None):
     """
     保存子域名到文件
     """
-    if len(subdomains)==0:
-        print("[!] 无子域名可保存")
+    if len(domains)==0:
+        print("[!] 无域名可保存")
 
     if output_file is None:
         now = datetime.datetime.now()
         date_str = f"{now.year}{now.month:02d}{now.day:02d}"
-        output_file = f"{unit_name}_icp_domains_{date_str}.txt"
-    # 排序以便阅读
-    sorted_subdomains = sorted(subdomains, key=lambda x: (len(x.split('.')), x))
-    print(f"[+] 找到 {len(sorted_subdomains)} 个唯一子域名")
+        output_file = f"{unit_name}_icp_domains_{date_str}.csv"
     # 保存到文本文件
-    with open(output_file, 'w', encoding='utf-8') as f:
-        for subdomain in sorted_subdomains:
-            f.write(f"{subdomain}\n")
-    print(f"[+] 子域名已保存到: {output_file}")
+    with open(output_file, 'w',newline="", encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerows(domains)   # 一次性写入多行
+    print(f"[+] 域名已保存到: {output_file}")
 
-
-    # 使用示例
-
+#数据源为工信部服务平台：https://beian.miit.gov.cn/
 #基于https://github.com/HG-ha/ICP_Query项目，由于网站接口经常变动，所以使用时关注项目更新，或者自行调整代码以适应接口变动
 #py -3 .\src\Domain\ICPMainDomainFinder.py -n 科大讯飞股份有限公司
+#py -3 .\src\Domain\ICPMainDomainFinder.py -n 皖ICP备05001217号
 if __name__ == "__main__":
     # 创建解析器
     parser = argparse.ArgumentParser(description='这是一个示例程序')
     # 添加位置参数（必须按顺序提供）
     parser.add_argument('--unit_name','-n',required=True,help='单位名称')
-    parser.add_argument('--output', '-o',default=f'{datetime.now().strftime("%Y%m%d_%H%M%S")}_results.txt',help='输出文件')
+    parser.add_argument('--output', '-o',default=f'icp_{datetime.now().strftime("%Y%m%d_%H%M%S")}_results.csv',help='输出文件')
     parser.add_argument('--verbose', '-v',action='store_true',help='详细输出')
     # 解析参数
     args = parser.parse_args()
     domain_list = asyncio.run(execute_icp_query(args.unit_name))
     print(f"ICP查询结果: {len(domain_list)} 个域名")
-    cleaned_domains = clean_subdomains(domain_list)
-    print(f"清理后共有: {len(cleaned_domains)} 个唯一域名")
-    save_subdomains(args.unit_name,cleaned_domains,args.output)
+    save_subdomains(args.unit_name,domain_list,args.output)
