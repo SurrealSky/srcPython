@@ -224,10 +224,11 @@ class FireflyDomainCrawler:
         else:
             print("跳过数据抓取,从本地文件读取")
             #从文件中读取数据
-            with open('domains.csv', mode='r', encoding='utf-8') as crawfile:
+            with open('domains.csv', mode='r', encoding='gbk') as crawfile:
                 reader = csv.reader(crawfile)
                 next(reader)  # 跳过表头
                 for row in reader:
+                    print(row[0])
                     firefly_crawler_data.add(row[0])  # 假设 domain 在第一列
 
         #firefly_crawler_data = {"xfyun.com","xunfei.cn","xunfei.com","iflytek.com","iflytek.cn"}
