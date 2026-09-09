@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JS 代码测试器</title>
+    <style>
+        /* ========== 全局重置 & 暗色主题 ========== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0d1117;
+            color: #e6edf3;
+            font-family: 'Segoe UI', 'SF Pro Display', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        /* ========== 主容器 ========== */
+        .app {
+            width: 100%;
+            max-width: 1280px;
+            height: 100%;
+            max-height: 900px;
+            background: #161b22;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.04);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ========== 标题栏 ========== */
+        .header {
+            padding: 16px 24px;
+            background: #0d1117;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo {
+            font-size: 22px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #f0883e, #f6a85b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo span {
+            font-size: 26px;
+            -webkit-text-fill-color: initial;
+        }
+
+        .env-badge {
+            font-size: 12px;
+            background: #21262d;
+            color: #8b949e;
+            padding: 4px 12px;
+            border-radius: 20px;
+            border: 1px solid #30363d;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .env-badge .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #3fb950;
+            display: inline-block;
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.5;
+                transform: scale(0.85);
+            }
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            color: #8b949e;
+        }
+
+        .header-right kbd {
+            background: #21262d;
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid #30363d;
+            font-size: 11px;
+            font-family: inherit;
+            color: #c9d1d9;
+        }
+
+        /* ========== 主区域（代码输入 + 按钮） ========== */
+        .main-area {
+            display: flex;
+            gap: 0;
+            flex: 1;
+            min-height: 0;
+            border-bottom: 1px solid #30363d;
+        }
+
+        /* --- 代码编辑器容器 --- */
+        .editor-wrap {
+            flex: 1;
+            position: relative;
+            background: #0d1117;
+            min-width: 0;
+        }
+
+        .editor-wrap textarea {
+            width: 100%;
+            height: 100%;
+            padding: 20px 24px;
+            background: transparent;
+            border: none;
+            outline: none;
+            resize: none;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 15px;
+            line-height: 1.7;
+            color: #e6edf3;
+            tab-size: 2;
+            letter-spacing: 0.2px;
+        }
+
+        .editor-wrap textarea::selection {
+            background: #3b4a5a;
+        }
+
+        .editor-wrap textarea::placeholder {
+            color: #484f58;
+            font-style: italic;
+        }
+
+        /* 行号（纯装饰，用伪元素模拟） */
+        .editor-wrap .line-numbers {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 48px;
+            padding: 20px 0 20px 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            line-height: 1.7;
+            color: #30363d;
+            text-align: right;
+            pointer-events: none;
+            user-select: none;
+            overflow: hidden;
+        }
+
+        .editor-wrap textarea {
+            padding-left: 60px;
+        }
+
+        /* --- 右侧按钮面板 --- */
+        .action-panel {
+            width: 120px;
+            flex-shrink: 0;
+            background: #0d1117;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            padding: 20px 12px;
+            gap: 12px;
+            border-left: 1px solid #21262d;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px 0;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-family: inherit;
+        }
+
+        .btn:active {
+            transform: scale(0.96);
+        }
+
+        .btn-execute {
+            background: linear-gradient(135deg, #238636, #2ea043);
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(35, 134, 54, 0.25);
+        }
+
+        .btn-execute:hover {
+            background: linear-gradient(135deg, #2ea043, #3fb950);
+            box-shadow: 0 6px 24px rgba(35, 134, 54, 0.35);
+            transform: translateY(-1px);
+        }
+
+        .btn-execute:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .btn-clear {
+            background: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+        }
+
+        .btn-clear:hover {
+            background: #30363d;
+            border-color: #484f58;
+        }
+
+        .btn-info {
+            background: transparent;
+            color: #8b949e;
+            border: 1px solid #21262d;
+            font-size: 13px;
+            padding: 8px 0;
+            margin-top: auto;
+        }
+
+        .btn-info:hover {
+            background: #21262d;
+            color: #c9d1d9;
+        }
+
+        /* ========== 输出区域 ========== */
+        .output-area {
+            flex-shrink: 0;
+            height: 240px;
+            background: #0d1117;
+            display: flex;
+            flex-direction: column;
+            border-top: 1px solid #21262d;
+        }
+
+        .output-header {
+            padding: 8px 24px;
+            background: #161b22;
+            border-bottom: 1px solid #21262d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            font-size: 13px;
+            color: #8b949e;
+        }
+
+        .output-header .stats {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .output-header .stats .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .output-header .stats .stat-item .num {
+            color: #e6edf3;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .output-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 24px 16px;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            background: #0d1117;
+            scroll-behavior: smooth;
+        }
+
+        .output-body::-webkit-scrollbar {
+            width: 6px;
+        }
+        .output-body::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .output-body::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 4px;
+        }
+        .output-body::-webkit-scrollbar-thumb:hover {
+            background: #484f58;
+        }
+
+        /* --- 输出条目样式 --- */
+        .output-line {
+            padding: 2px 0;
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .output-line .prefix {
+            flex-shrink: 0;
+            font-weight: 600;
+            font-size: 12px;
+            width: 20px;
+            text-align: right;
+            color: #484f58;
+            user-select: none;
+        }
+
+        .output-line .content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        /* 不同类型的前缀颜色 */
+        .output-line.type-log .prefix {
+            color: #8b949e;
+        }
+        .output-line.type-log .content {
+            color: #e6edf3;
+        }
+
+        .output-line.type-error .prefix {
+            color: #f85149;
+        }
+        .output-line.type-error .content {
+            color: #f85149;
+        }
+
+        .output-line.type-warn .prefix {
+            color: #d29922;
+        }
+        .output-line.type-warn .content {
+            color: #d29922;
+        }
+
+        .output-line.type-info .prefix {
+            color: #58a6ff;
+        }
+        .output-line.type-info .content {
+            color: #58a6ff;
+        }
+
+        .output-line.type-result .prefix {
+            color: #f0883e;
+        }
+        .output-line.type-result .content {
+            color: #f6a85b;
+            font-weight: 500;
+        }
+
+        .output-line.type-result .content .type-tag {
+            font-size: 11px;
+            background: #21262d;
+            color: #8b949e;
+            padding: 0 8px;
+            border-radius: 4px;
+            margin-left: 8px;
+            font-weight: 400;
+        }
+
+        .output-line.type-empty {
+            color: #484f58;
+            font-style: italic;
+            padding: 12px 0;
+            border-bottom: none;
+        }
+
+        .output-line.type-divider {
+            border-bottom: 1px solid #21262d;
+            padding: 6px 0;
+            margin: 4px 0;
+        }
+
+        /* 对象 / 数组 格式化 */
+        .output-line .content .object-preview {
+            color: #79c0ff;
+        }
+        .output-line .content .string-value {
+            color: #a5d6ff;
+        }
+        .output-line .content .number-value {
+            color: #f0883e;
+        }
+        .output-line .content .boolean-value {
+            color: #f0883e;
+        }
+        .output-line .content .null-value {
+            color: #8b949e;
+            font-style: italic;
+        }
+        .output-line .content .undefined-value {
+            color: #8b949e;
+            font-style: italic;
+        }
+
+        /* ========== 空状态 ========== */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #484f58;
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 14px;
+            gap: 4px;
+        }
+
+        .empty-state .icon {
+            font-size: 32px;
+            opacity: 0.3;
+            margin-bottom: 4px;
+        }
+
+        /* ========== Toast 提示 ========== */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: #21262d;
+            color: #e6edf3;
+            padding: 10px 24px;
+            border-radius: 12px;
+            border: 1px solid #30363d;
+            font-size: 14px;
+            font-family: 'Segoe UI', sans-serif;
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+            z-index: 999;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* ========== 响应式 ========== */
+        @media (max-width: 768px) {
+            body {
+                padding: 8px;
+            }
+            .app {
+                max-height: 100vh;
+                border-radius: 12px;
+            }
+            .main-area {
+                flex-direction: column;
+            }
+            .action-panel {
+                width: 100%;
+                flex-direction: row;
+                padding: 12px 16px;
+                border-left: none;
+                border-top: 1px solid #21262d;
+                flex-shrink: 0;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+            .action-panel .btn {
+                flex: 1;
+                min-width: 80px;
+                padding: 10px 0;
+                font-size: 14px;
+            }
+            .action-panel .btn-info {
+                margin-top: 0;
+                flex: 0.5;
+            }
+            .editor-wrap textarea {
+                padding: 16px 16px 16px 48px;
+                font-size: 14px;
+            }
+            .editor-wrap .line-numbers {
+                padding: 16px 0 16px 8px;
+                width: 40px;
+                font-size: 12px;
+            }
+            .output-area {
+                height: 180px;
+            }
+            .output-body {
+                padding: 10px 16px 14px;
+                font-size: 13px;
+            }
+            .header {
+                padding: 12px 16px;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .header-right {
+                font-size: 12px;
+            }
+            .logo {
+                font-size: 18px;
+            }
+            .env-badge {
+                font-size: 10px;
+                padding: 2px 10px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header-right .hide-mobile {
+                display: none;
+            }
+            .action-panel .btn {
+                font-size: 13px;
+                padding: 8px 0;
+            }
+            .output-line {
+                font-size: 12px;
+            }
+            .output-line .prefix {
+                width: 16px;
+                font-size: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ====== 主应用 ====== -->
+    <div class="app" id="app">
+
+        <!-- 标题栏 -->
+        <header class="header">
+            <div class="header-left">
+                <div class="logo">
+                    <span>⚡</span> JS 测试器
+                </div>
+                <div class="env-badge" id="envBadge">
+                    <span class="dot"></span>
+                    <span id="envLabel">Electron · 未知</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <span class="hide-mobile">执行快捷键</span>
+                <kbd>⌘</kbd> <kbd>Enter</kbd>
+                <span style="margin-left:4px;opacity:0.5;">|</span>
+                <span id="lineCount" style="color:#484f58;">行 0</span>
+            </div>
+        </header>
+
+        <!-- 主区域：编辑器 + 按钮 -->
+        <div class="main-area">
+            <div class="editor-wrap">
+                <!-- 行号装饰 -->
+                <div class="line-numbers" id="lineNumbers" aria-hidden="true">1</div>
+                <!-- 代码输入 -->
+                <textarea
+                id="codeInput"
+                spellcheck="false"
+                placeholder="// 在此输入 JavaScript 代码&#10;// 支持 async / await，支持 Node.js API（若可用）&#10;// 示例：console.log('Hello, Electron!'); 1 + 2"
+                ></textarea>
+            </div>
+
+            <!-- 右侧按钮面板 -->
+            <div class="action-panel">
+                <button class="btn btn-execute" id="executeBtn">
+                    <span>▶</span> 执行
+                </button>
+                <button class="btn btn-clear" id="clearBtn">
+                    <span>✕</span> 清空
+                </button>
+                <button class="btn btn-info" id="infoBtn">
+                    <span>ⓘ</span> 环境
+                </button>
+            </div>
+        </div>
+
+        <!-- 输出区域 -->
+        <div class="output-area">
+            <div class="output-header">
+                <span>📋 输出结果</span>
+                <div class="stats">
+                    <span class="stat-item">
+                        输出 <span class="num" id="outputCount">0</span>
+                    </span>
+                    <span class="stat-item">
+                        耗时 <span class="num" id="execTime">—</span>
+                    </span>
+                </div>
+            </div>
+            <div class="output-body" id="outputBody">
+                <div class="empty-state">
+                    <span class="icon">⌨️</span>
+                    <span>输入代码后点击「执行」或按 ⌘+Enter</span>
+                    <span style="font-size:12px;color:#30363d;">支持同步 / 异步代码，所有 console 输出将被捕获</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        (function() {
+            'use strict';
+
+            // ============================================================
+            //  1. DOM 引用
+            // ============================================================
+            const codeInput = document.getElementById('codeInput');
+            const executeBtn = document.getElementById('executeBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            const infoBtn = document.getElementById('infoBtn');
+            const outputBody = document.getElementById('outputBody');
+            const outputCount = document.getElementById('outputCount');
+            const execTime = document.getElementById('execTime');
+            const lineNumbers = document.getElementById('lineNumbers');
+            const lineCount = document.getElementById('lineCount');
+            const envLabel = document.getElementById('envLabel');
+            const toast = document.getElementById('toast');
+
+            // ============================================================
+            //  2. 状态
+            // ============================================================
+            let isExecuting = false;
+            let outputLines = [];
+            let lineIdCounter = 0;
+
+            // 保存原始 console 方法
+            const originalConsole = {
+                log: console.log,
+                error: console.error,
+                warn: console.warn,
+                info: console.info,
+                debug: console.debug,
+                dir: console.dir,
+                table: console.table,
+            };
+
+            // ============================================================
+            //  3. 环境检测
+            // ============================================================
+            function detectEnvironment() {
+                const isElectron = !!(window && window.process && window.process.type);
+                const hasNode = !!(typeof process !== 'undefined' && process.versions && process.versions.node);
+                const nodeVersion = hasNode ? process.versions.node : 'N/A';
+                const isBrowser = typeof window !== 'undefined' && !isElectron;
+
+                let label = '浏览器';
+                if (isElectron) label = 'Electron · 渲染进程';
+                else if (hasNode) label = 'Node.js · 混合';
+                else if (isBrowser) label = '浏览器 · Web';
+
+                if (hasNode) {
+                    label += ` · Node ${nodeVersion}`;
+                }
+
+                return {
+                    isElectron,
+                    hasNode,
+                    nodeVersion,
+                    isBrowser,
+                    label,
+                    // 检测是否可访问 fs
+                    hasFS: (() => {
+                        try {
+                            return !!(typeof require !== 'undefined' && require('fs'));
+                        } catch { return false; }
+                    })(),
+                    // 检测是否可访问 electron
+                    hasElectron: (() => {
+                        try {
+                            return !!(window && window.require && window.require('electron'));
+                        } catch { return false; }
+                    })(),
+                };
+            }
+
+            const env = detectEnvironment();
+            envLabel.textContent = env.label;
+
+            // ============================================================
+            //  4. 工具函数 —— 格式化值
+            // ============================================================
+            function formatValue(value, maxDepth = 2, currentDepth = 0) {
+                if (currentDepth > maxDepth) {
+                    return '<span style="color:#484f58;">…</span>';
+                }
+
+                const type = typeof value;
+
+                if (value === null) {
+                    return '<span class="null-value">null</span>';
+                }
+                if (type === 'undefined') {
+                    return '<span class="undefined-value">undefined</span>';
+                }
+                if (type === 'string') {
+                    const escaped = value
+                        .replace(/\\/g, '\\\\')
+                        .replace(/"/g, '\\"')
+                        .replace(/\n/g, '\\n')
+                        .replace(/\r/g, '\\r')
+                        .replace(/\t/g, '\\t');
+                    return `<span class="string-value">"${escaped}"</span>`;
+                }
+                if (type === 'number') {
+                    return `<span class="number-value">${String(value)}</span>`;
+                }
+                if (type === 'boolean') {
+                    return `<span class="boolean-value">${String(value)}</span>`;
+                }
+                if (type === 'function') {
+                    const name = value.name || 'anonymous';
+                    return `<span style="color:#d2a8ff;">[Function${name ? ' ' + name : ''}]</span>`;
+                }
+                if (type === 'symbol') {
+                    return `<span style="color:#ff7b72;">${String(value)}</span>`;
+                }
+                if (type === 'bigint') {
+                    return `<span class="number-value">${String(value)}n</span>`;
+                }
+
+                // 对象
+                if (type === 'object') {
+                    try {
+                        if (value instanceof Error) {
+                            return `<span style="color:#f85149;">${value.name}: ${value.message}</span>`;
+                        }
+                        if (value instanceof Date) {
+                            return `<span style="color:#79c0ff;">${value.toISOString()}</span>`;
+                        }
+                        if (value instanceof RegExp) {
+                            return `<span style="color:#79c0ff;">${String(value)}</span>`;
+                        }
+                        if (Array.isArray(value)) {
+                            if (value.length === 0) return '<span style="color:#79c0ff;">[]</span>';
+                            const items = value
+                                .slice(0, 8)
+                                .map(v => formatValue(v, maxDepth, currentDepth + 1))
+                                .join(', ');
+                            const more = value.length > 8 ? `, … +${value.length - 8}` : '';
+                            return `<span style="color:#79c0ff;">[${items}${more}]</span>`;
+                        }
+                        // 普通对象
+                        const keys = Object.keys(value);
+                        if (keys.length === 0) return '<span style="color:#79c0ff;">{}</span>';
+                        const pairs = keys
+                            .slice(0, 6)
+                            .map(k => {
+                                const v = formatValue(value[k], maxDepth, currentDepth + 1);
+                                return `<span style="color:#8b949e;">${k}</span>: ${v}`;
+                            })
+                            .join(', ');
+                        const more = keys.length > 6 ? `, … +${keys.length - 6}` : '';
+                        return `<span style="color:#79c0ff;">{${pairs}${more}}</span>`;
+                    } catch {
+                        return `<span style="color:#484f58;">[Object]</span>`;
+                    }
+                }
+
+                return `<span style="color:#484f58;">${String(value)}</span>`;
+            }
+
+            // 格式化单个值用于输出（带类型标签）
+            function formatOutputValue(value) {
+                if (value === null) {
+                    return { html: '<span class="null-value">null</span>', type: 'null' };
+                }
+                if (value === undefined) {
+                    return { html: '<span class="undefined-value">undefined</span>', type: 'undefined' };
+                }
+                const type = typeof value;
+                let typeLabel = type;
+                if (Array.isArray(value)) typeLabel = 'array';
+                else if (value instanceof Date) typeLabel = 'Date';
+                else if (value instanceof RegExp) typeLabel = 'RegExp';
+                else if (value instanceof Error) typeLabel = 'Error';
+                else if (value instanceof Promise) typeLabel = 'Promise';
+                else if (value instanceof Map) typeLabel = 'Map';
+                else if (value instanceof Set) typeLabel = 'Set';
+                else if (value instanceof WeakMap) typeLabel = 'WeakMap';
+                else if (value instanceof WeakSet) typeLabel = 'WeakSet';
+
+                const html = formatValue(value);
+                return { html, type: typeLabel };
+            }
+
+            // ============================================================
+            //  5. 输出管理
+            // ============================================================
+            function addOutputLine(type, content, isResult = false) {
+                const line = {
+                    id: ++lineIdCounter,
+                    type,
+                    content,
+                    isResult,
+                    timestamp: Date.now(),
+                };
+                outputLines.push(line);
+                renderOutput();
+                updateStats();
+                // 自动滚动到底部
+                requestAnimationFrame(() => {
+                    outputBody.scrollTop = outputBody.scrollHeight;
+                });
+            }
+
+            function clearOutput() {
+                outputLines = [];
+                renderOutput();
+                updateStats();
+                execTime.textContent = '—';
+            }
+
+            function renderOutput() {
+                if (outputLines.length === 0) {
+                    outputBody.innerHTML = `
+                        <div class="empty-state">
+                            <span class="icon">⌨️</span>
+                            <span>输入代码后点击「执行」或按 ⌘+Enter</span>
+                            <span style="font-size:12px;color:#30363d;">支持同步 / 异步代码，所有 console 输出将被捕获</span>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = '';
+                for (const line of outputLines) {
+                    if (line.type === 'divider') {
+                        html += `<div class="output-line type-divider"></div>`;
+                        continue;
+                    }
+
+                    const prefixMap = {
+                        log: '>',
+                        error: '✖',
+                        warn: '⚠',
+                        info: 'ℹ',
+                        debug: '▸',
+                        result: '←',
+                    };
+                    const prefix = prefixMap[line.type] || '▸';
+                    const cls = `output-line type-${line.type}`;
+
+                    let contentHtml = line.content;
+                    // 如果是 result 类型，包装一下
+                    if (line.isResult) {
+                        // content 已经是格式化好的 html
+                        contentHtml = `<span class="content">${line.content}</span>`;
+                    } else {
+                        contentHtml = `<span class="content">${line.content}</span>`;
+                    }
+
+                    html += `<div class="${cls}"><span class="prefix">${prefix}</span>${contentHtml}</div>`;
+                }
+                outputBody.innerHTML = html;
+            }
+
+            function updateStats() {
+                outputCount.textContent = outputLines.filter(l => l.type !== 'divider').length;
+            }
+
+            // ============================================================
+            //  6. 执行引擎
+            // ============================================================
+            async function executeCode(code) {
+                if (isExecuting) return;
+                if (!code.trim()) {
+                    showToast('⚠️ 请先输入 JavaScript 代码');
+                    return;
+                }
+
+                isExecuting = true;
+                executeBtn.disabled = true;
+                executeBtn.innerHTML = '<span>⟳</span> 执行中…';
+
+                // 清空旧输出，添加分隔线
+                clearOutput();
+                addOutputLine('divider', '');
+                addOutputLine('info', `⏱️ 开始执行 …`);
+
+                const startTime = performance.now();
+
+                // 保存原始 console 方法
+                const orig = { ...originalConsole };
+
+                // 收集 console 输出
+                const consoleOutputs = [];
+
+                function captureConsole(type, args) {
+                    const formatted = args.map(arg => {
+                        if (typeof arg === 'string') return arg;
+                        const { html } = formatOutputValue(arg);
+                        return html;
+                    }).join(' ');
+                    consoleOutputs.push({ type, content: formatted });
+                    // 同时输出到原始 console
+                    orig[type].apply(console, args);
+                }
+
+                // 重写 console
+                console.log = (...args) => captureConsole('log', args);
+                console.error = (...args) => captureConsole('error', args);
+                console.warn = (...args) => captureConsole('warn', args);
+                console.info = (...args) => captureConsole('info', args);
+                console.debug = (...args) => captureConsole('debug', args);
+
+                // 对于 console.dir 和 console.table，特殊处理
+                console.dir = (obj, opts) => {
+                    const { html } = formatOutputValue(obj);
+                    consoleOutputs.push({ type: 'log', content: `dir: ${html}` });
+                    orig.dir.apply(console, [obj, opts]);
+                };
+                console.table = (data) => {
+                    try {
+                        const str = JSON.stringify(data, null, 2);
+                        consoleOutputs.push({ type: 'log', content: `table:\n${str}` });
+                    } catch {
+                        consoleOutputs.push({ type: 'log', content: '[table] 无法序列化' });
+                    }
+                    orig.table.apply(console, [data]);
+                };
+
+                let result = undefined;
+                let error = null;
+                let isAsync = false;
+
+                try {
+                    // 执行代码 —— 使用 eval 在相同上下文中执行
+                    const evalResult = eval(code);
+
+                    // 检测是否为 Promise
+                    if (evalResult && typeof evalResult.then === 'function') {
+                        isAsync = true;
+                        addOutputLine('info', `⏳ 检测到异步操作 (Promise)，等待完成 …`);
+                        result = await evalResult;
+                    } else {
+                        result = evalResult;
+                    }
+                } catch (err) {
+                    error = err;
+                } finally {
+                    // 恢复 console
+                    console.log = orig.log;
+                    console.error = orig.error;
+                    console.warn = orig.warn;
+                    console.info = orig.info;
+                    console.debug = orig.debug;
+                    console.dir = orig.dir;
+                    console.table = orig.table;
+                }
+
+                const endTime = performance.now();
+                const elapsed = (endTime - startTime).toFixed(2);
+
+                // 输出所有捕获的 console 内容
+                for (const item of consoleOutputs) {
+                    addOutputLine(item.type, item.content);
+                }
+
+                // 输出执行结果或错误
+                if (error) {
+                    const errorMsg = error.stack || error.message || String(error);
+                    addOutputLine('error', `❌ ${errorMsg}`);
+                } else {
+                    // 显示返回值（即使 undefined）
+                    if (result === undefined) {
+                        addOutputLine('result', `<span style="color:#484f58;">undefined</span>`, true);
+                    } else {
+                        const { html, type } = formatOutputValue(result);
+                        const typeTag = `<span class="type-tag">${type}</span>`;
+                        addOutputLine('result', `${html} ${typeTag}`, true);
+                    }
+                    // 如果是异步，额外提示
+                    if (isAsync) {
+                        addOutputLine('info', `✅ 异步操作完成`);
+                    }
+                }
+
+                // 执行时间
+                execTime.textContent = `${elapsed}ms`;
+                addOutputLine('info', `⏱️ 执行完成，耗时 ${elapsed}ms`);
+
+                // 恢复按钮
+                isExecuting = false;
+                executeBtn.disabled = false;
+                executeBtn.innerHTML = '<span>▶</span> 执行';
+
+                // 滚动到底部
+                setTimeout(() => {
+                    outputBody.scrollTop = outputBody.scrollHeight;
+                }, 50);
+            }
+
+            // ============================================================
+            //  7. 事件绑定
+            // ============================================================
+
+            // 执行按钮
+            executeBtn.addEventListener('click', () => {
+                executeCode(codeInput.value);
+            });
+
+            // 清空按钮
+            clearBtn.addEventListener('click', () => {
+                clearOutput();
+                execTime.textContent = '—';
+                showToast('🧹 已清空输出');
+            });
+
+            // 快捷键：Cmd+Enter / Ctrl+Enter
+            codeInput.addEventListener('keydown', (e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    executeCode(codeInput.value);
+                }
+                // Tab 缩进
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const start = codeInput.selectionStart;
+                    const end = codeInput.selectionEnd;
+                    if (start === end) {
+                        // 插入两个空格
+                        codeInput.value = codeInput.value.substring(0, start) + '  ' + codeInput.value.substring(end);
+                        codeInput.selectionStart = codeInput.selectionEnd = start + 2;
+                    } else {
+                        // 缩进选中行
+                        const lines = codeInput.value.split('\n');
+                        const cursorLineStart = codeInput.value.lastIndexOf('\n', start - 1) + 1;
+                        const cursorLineEnd = codeInput.value.indexOf('\n', end);
+                        const startLine = codeInput.value.substring(0, start).split('\n').length - 1;
+                        const endLine = codeInput.value.substring(0, end).split('\n').length - 1;
+                        for (let i = startLine; i <= endLine; i++) {
+                            lines[i] = '  ' + lines[i];
+                        }
+                        codeInput.value = lines.join('\n');
+                        codeInput.selectionStart = start + 2;
+                        codeInput.selectionEnd = end + 2 * (endLine - startLine + 1);
+                    }
+                    updateLineNumbers();
+                }
+            });
+
+            // 实时更新行号
+            codeInput.addEventListener('input', updateLineNumbers);
+            codeInput.addEventListener('scroll', syncScroll);
+
+            function updateLineNumbers() {
+                const lines = codeInput.value.split('\n');
+                const count = lines.length;
+                lineCount.textContent = `行 ${count}`;
+                let nums = '';
+                for (let i = 1; i <= count; i++) {
+                    nums += i + '\n';
+                }
+                lineNumbers.textContent = nums;
+                // 同步滚动
+                syncScroll();
+            }
+
+            function syncScroll() {
+                lineNumbers.scrollTop = codeInput.scrollTop;
+            }
+
+            // 环境信息按钮
+            infoBtn.addEventListener('click', () => {
+                const info = {
+                    '环境': env.label,
+                    'Node.js': env.nodeVersion,
+                    'Electron': env.isElectron ? '✅ 是' : '❌ 否',
+                    'fs 模块': env.hasFS ? '✅ 可用' : '❌ 不可用',
+                    'electron 模块': env.hasElectron ? '✅ 可用' : '❌ 不可用',
+                    '浏览器': env.isBrowser ? '✅ 是' : '❌ 否',
+                    '当前 URL': window.location.href,
+                    'User Agent': navigator.userAgent,
+                };
+                clearOutput();
+                addOutputLine('info', '📊 环境信息');
+                for (const [key, value] of Object.entries(info)) {
+                    addOutputLine('log', `<span style="color:#8b949e;">${key}</span>: <span style="color:#e6edf3;">${value}</span>`);
+                }
+                addOutputLine('divider', '');
+                addOutputLine('info', '💡 你可以在此测试任何 JS API，包括 Node.js 和 Electron 模块（如果可用）');
+                showToast('📊 已显示环境信息');
+            });
+
+            // ============================================================
+            //  8. Toast
+            // ============================================================
+            let toastTimer = null;
+
+            function showToast(msg) {
+                toast.textContent = msg;
+                toast.classList.add('show');
+                clearTimeout(toastTimer);
+                toastTimer = setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 2500);
+            }
+
+            // ============================================================
+            //  9. 初始化
+            // ============================================================
+            updateLineNumbers();
+
+            // 默认填入示例代码
+            codeInput.value = `// 试试这些示例：
+
+            // 1. 基础运算
+            console.log('1 + 2 =', 1 + 2);
+
+            // 2. 对象操作
+            const obj = { name: 'Electron', version: '29.0.0' };
+            console.log('对象:', obj);
+
+            // 3. 数组操作
+            const arr = [1, 2, 3, 4, 5];
+            console.log('数组:', arr.map(x => x * 2));
+
+            // 4. 异步 (取消注释试试)
+            // await new Promise(r => setTimeout(r, 300));
+            // console.log('⏰ 延迟 300ms 后执行');
+
+            // 5. 返回值 (会显示在 ← 结果中)
+            42 * 3;
+            `;
+
+            // 自动执行一次示例
+            setTimeout(() => {
+                executeCode(codeInput.value);
+            }, 300);
+
+            // 暴露一些全局变量方便调试
+            window.__test = {
+                env,
+                execute: executeCode,
+                clear: clearOutput,
+                formatValue,
+            };
+
+            console.log('✅ JS 代码测试器已加载');
+            console.log('📦 环境信息:', env);
+
+            // 额外: 如果用户点击输出区域，聚焦到输入
+            outputBody.addEventListener('click', () => {
+                codeInput.focus();
+            });
+
+        })();
+    </script>
+
+</body>
+</html>
